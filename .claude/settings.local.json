@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo:*)",
+      "Bash(java:*)",
+      "Bash(where:*)",
+      "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/java\" -version)",
+      "Bash(curl:*)",
+      "Bash(\"/c/Users/GovertvanDrimmelen/AppData/Local/Android/Sdk/platform-tools/adb.exe\" devices)",
+      "Bash(./gradlew installDebug:*)",
+      "Bash(cmd.exe //c \"gradlew.bat installDebug\")",
+      "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/java.exe\" -classpath \"gradle/wrapper/gradle-wrapper.jar\" org.gradle.wrapper.GradleWrapperMain installDebug)",
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(cmd //c:*)",
+      "Bash(\"C:/Work/Alignation/gradlew.bat\" assembleDebug)",
+      "Bash(adb devices:*)",
+      "Bash(adb install:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

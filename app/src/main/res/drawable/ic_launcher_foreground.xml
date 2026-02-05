@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Tooth/smile icon representing aligners -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28c-14.4,0 -26,11.6 -26,26c0,14.4 11.6,26 26,26c14.4,0 26,-11.6 26,-26C80,39.6 68.4,28 54,28zM54,74c-11,0 -20,-9 -20,-20c0,-11 9,-20 20,-20c11,0 20,9 20,20C74,65 65,74 54,74z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,40c-7.7,0 -14,6.3 -14,14c0,7.7 6.3,14 14,14c7.7,0 14,-6.3 14,-14C68,46.3 61.7,40 54,40zM54,62c-4.4,0 -8,-3.6 -8,-8c0,-4.4 3.6,-8 8,-8c4.4,0 8,3.6 8,8C62,58.4 58.4,62 54,62z"/>
+    <!-- Check mark inside -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,56l-4,-4l-2,2l6,6l10,-10l-2,-2z"/>
+</vector>
