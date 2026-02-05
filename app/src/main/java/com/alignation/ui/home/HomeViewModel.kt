@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -61,6 +64,7 @@ data class HomeUiState(
     val needsSetup: Boolean = false
 )
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: AlignmentRepository,
@@ -70,9 +74,19 @@ class HomeViewModel @Inject constructor(
 
     private val _currentTime = MutableStateFlow(Instant.now())
 
+    // Track current date - when this changes, we need to refresh today's events
+    private val _currentDate = _currentTime
+        .map { it.atZone(ZoneId.systemDefault()).toLocalDate() }
+        .distinctUntilChanged()
+
+    // Today's events flow that updates when the date changes
+    private val todayEventsFlow = _currentDate.flatMapLatest { date ->
+        repository.getEventsForDate(date)
+    }
+
     val uiState: StateFlow<HomeUiState> = combine(
         repository.getLatestEvent(),
-        repository.getEventsForToday(),
+        todayEventsFlow,
         settingsRepository.getSettings(),
         _currentTime
     ) { latestEvent, todayEvents, settings, currentTime ->
@@ -101,8 +115,8 @@ class HomeViewModel @Inject constructor(
         val effectiveAllowance = settings.dailyAllowanceMinutes + graceMinutes
         val budgetStatus = getBudgetStatus(todayTimeOut.toMinutes().toInt(), effectiveAllowance, settings.maxAllowanceMinutes)
 
-        // Treatment progress
-        val today = LocalDate.now()
+        // Treatment progress - derive today from currentTime for consistency
+        val today = currentTime.atZone(ZoneId.systemDefault()).toLocalDate()
         val daysElapsed = ChronoUnit.DAYS.between(settings.treatmentStartDate, today).toInt().coerceAtLeast(0)
         val totalDays = settings.treatmentWeeks * 7
         val daysRemaining = (totalDays - daysElapsed).coerceAtLeast(0)
@@ -167,7 +181,8 @@ class HomeViewModel @Inject constructor(
         currentTime: Instant,
         isCurrentlyIn: Boolean
     ): Duration {
-        val today = LocalDate.now()
+        // Derive today from currentTime to ensure consistency at midnight boundary
+        val today = currentTime.atZone(ZoneId.systemDefault()).toLocalDate()
         val startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant()
 
         // Determine state at midnight by looking at yesterday's last event
