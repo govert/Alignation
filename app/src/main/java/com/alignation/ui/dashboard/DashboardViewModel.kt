@@ -113,9 +113,10 @@ class DashboardViewModel @Inject constructor(
                 weekStats.add(calculateDayStats(date, events, wasOut, settings))
             }
 
-            // Load month stats
+            // Load month stats - only for days from treatment start onwards
             val monthStats = mutableMapOf<LocalDate, DayStats>()
-            var currentDate = monthStart
+            val monthStatsStart = if (treatmentStart.isAfter(monthStart)) treatmentStart else monthStart
+            var currentDate = monthStatsStart
             while (!currentDate.isAfter(today)) {
                 val events = repository.getEventsForDateOnce(currentDate)
                 val prevDayEvents = repository.getEventsForDateOnce(currentDate.minusDays(1))

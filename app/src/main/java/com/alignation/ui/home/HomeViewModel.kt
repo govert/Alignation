@@ -54,6 +54,9 @@ data class HomeUiState(
     val daysRemaining: Int = 112,
     val treatmentProgress: Float = 0f,
 
+    // Aligner set
+    val currentSetNumber: Int? = null,
+
     // Streak & stats
     val currentStreak: Int = 0,
     val problemDays: Int = 0,
@@ -88,8 +91,14 @@ class HomeViewModel @Inject constructor(
         repository.getLatestEvent(),
         todayEventsFlow,
         settingsRepository.getSettings(),
-        _currentTime
-    ) { latestEvent, todayEvents, settings, currentTime ->
+        _currentTime,
+        repository.getCurrentSet()
+    ) { flows ->
+        val latestEvent = flows[0] as AlignmentEvent?
+        val todayEvents = @Suppress("UNCHECKED_CAST") (flows[1] as List<AlignmentEvent>)
+        val settings = flows[2] as UserSettings?
+        val currentTime = flows[3] as Instant
+        val currentSet = flows[4] as com.alignation.data.model.AlignerSet?
 
         if (settings == null) {
             return@combine HomeUiState(
@@ -108,8 +117,12 @@ class HomeViewModel @Inject constructor(
         // Calculate time OUT today
         val todayTimeOut = calculateTimeOut(todayEvents, currentTime, isAlignerIn)
 
-        // Calculate grace from yesterday
-        val graceMinutes = calculateGraceFromYesterday(settings)
+        // Calculate grace from yesterday (only if enabled)
+        val graceMinutes = if (settings.enableGraceTime) {
+            calculateGraceFromYesterday(settings)
+        } else {
+            0
+        }
 
         // Determine budget status
         val effectiveAllowance = settings.dailyAllowanceMinutes + graceMinutes
@@ -139,6 +152,7 @@ class HomeViewModel @Inject constructor(
             totalWeeks = settings.treatmentWeeks,
             daysRemaining = daysRemaining,
             treatmentProgress = treatmentProgress,
+            currentSetNumber = currentSet?.setNumber,
             currentStreak = streak,
             problemDays = problemDays,
             totalDaysTracked = daysElapsed,
@@ -165,7 +179,8 @@ class HomeViewModel @Inject constructor(
     fun onRemoveClicked() {
         viewModelScope.launch {
             repository.logRemoval()
-            reminderScheduler.scheduleTimedReminders()
+            val settings = settingsRepository.getSettingsOnce()
+            reminderScheduler.scheduleTimedReminders(settings)
         }
     }
 
@@ -173,6 +188,12 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             repository.logReplacement()
             reminderScheduler.cancelAllReminders()
+        }
+    }
+
+    fun onNewSetStarted(setNumber: Int, notes: String?) {
+        viewModelScope.launch {
+            repository.startNewSet(setNumber, notes)
         }
     }
 

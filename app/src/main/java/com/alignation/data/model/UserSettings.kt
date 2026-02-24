@@ -14,5 +14,17 @@ data class UserSettings(
     val dailyAllowanceMinutes: Int = 120, // 2 hours target
     val maxAllowanceMinutes: Int = 180, // 3 hours = problem day
     val maxGraceMinutes: Int = 30, // Max carry-over from previous day
-    val createdAt: Instant = Instant.now()
+    val createdAt: Instant = Instant.now(),
+    // Alarm sound URIs (null = system default)
+    val alertSound1hUri: String? = null,
+    val alertSound15mBeforeSoftUri: String? = null,
+    val alertSound15mBeforeHardUri: String? = null,
+    val alertSound5mBeforeHardUri: String? = null,
+    // Feature toggles
+    val enableGraceTime: Boolean = true,
+    // Alarm enable/disable toggles
+    val enableAlarm1h: Boolean = true,
+    val enableAlarm15mBeforeSoft: Boolean = true,
+    val enableAlarm15mBeforeHard: Boolean = true,
+    val enableAlarm5mBeforeHard: Boolean = true
 )

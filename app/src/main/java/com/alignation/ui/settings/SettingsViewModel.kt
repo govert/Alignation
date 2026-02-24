@@ -2,8 +2,11 @@ package com.alignation.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.alignation.data.model.AlignerSet
 import com.alignation.data.model.UserSettings
+import com.alignation.data.repository.AlignmentRepository
 import com.alignation.data.repository.SettingsRepository
+import com.alignation.ui.sharing.ShareHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,12 +22,15 @@ data class SettingsUiState(
     val isLoading: Boolean = true,
     val showDatePicker: Boolean = false,
     val notificationsEnabled: Boolean = true,
-    val reminderDelayMinutes: Int = 30
+    val reminderDelayMinutes: Int = 30,
+    val setHistory: List<AlignerSet> = emptyList()
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val alignmentRepository: AlignmentRepository,
+    private val shareHelper: ShareHelper
 ) : ViewModel() {
 
     private val _showDatePicker = MutableStateFlow(false)
@@ -35,14 +41,15 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.getSettings(),
         _showDatePicker,
         _notificationsEnabled,
-        _reminderDelayMinutes
-    ) { settings, showDatePicker, notificationsEnabled, reminderDelay ->
+        alignmentRepository.getAllSets()
+    ) { settings, showDatePicker, notificationsEnabled, setHistory ->
         SettingsUiState(
             settings = settings,
             isLoading = false,
             showDatePicker = showDatePicker,
             notificationsEnabled = notificationsEnabled,
-            reminderDelayMinutes = reminderDelay
+            reminderDelayMinutes = _reminderDelayMinutes.value,
+            setHistory = setHistory
         )
     }.stateIn(
         scope = viewModelScope,
@@ -71,5 +78,66 @@ class SettingsViewModel @Inject constructor(
 
     fun setReminderDelay(minutes: Int) {
         _reminderDelayMinutes.value = minutes
+    }
+
+    fun updateDailyAllowance(minutes: Int) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettingsOnce() ?: return@launch
+            settingsRepository.updateSettings(current.copy(dailyAllowanceMinutes = minutes))
+        }
+    }
+
+    fun updateMaxAllowance(minutes: Int) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettingsOnce() ?: return@launch
+            settingsRepository.updateSettings(current.copy(maxAllowanceMinutes = minutes))
+        }
+    }
+
+    fun updateMaxGrace(minutes: Int) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettingsOnce() ?: return@launch
+            settingsRepository.updateSettings(current.copy(maxGraceMinutes = minutes))
+        }
+    }
+
+    fun updateEnableGraceTime(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettingsOnce() ?: return@launch
+            settingsRepository.updateSettings(current.copy(enableGraceTime = enabled))
+        }
+    }
+
+    fun shareProgress() {
+        viewModelScope.launch {
+            val summary = shareHelper.buildProgressSummary()
+            shareHelper.shareText(summary)
+        }
+    }
+
+    fun exportData() {
+        viewModelScope.launch {
+            val csv = shareHelper.exportCsv()
+            shareHelper.shareText(csv)
+        }
+    }
+
+    fun updateAlarmToggle(
+        alarm1h: Boolean? = null,
+        alarm15mSoft: Boolean? = null,
+        alarm15mHard: Boolean? = null,
+        alarm5mHard: Boolean? = null
+    ) {
+        viewModelScope.launch {
+            val current = settingsRepository.getSettingsOnce() ?: return@launch
+            settingsRepository.updateSettings(
+                current.copy(
+                    enableAlarm1h = alarm1h ?: current.enableAlarm1h,
+                    enableAlarm15mBeforeSoft = alarm15mSoft ?: current.enableAlarm15mBeforeSoft,
+                    enableAlarm15mBeforeHard = alarm15mHard ?: current.enableAlarm15mBeforeHard,
+                    enableAlarm5mBeforeHard = alarm5mHard ?: current.enableAlarm5mBeforeHard
+                )
+            )
+        }
     }
 }

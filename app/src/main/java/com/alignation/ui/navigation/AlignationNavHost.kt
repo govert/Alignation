@@ -22,8 +22,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.alignation.ui.dashboard.DashboardScreen
+import com.alignation.ui.feedback.FeedbackScreen
 import com.alignation.ui.history.HistoryScreen
 import com.alignation.ui.home.HomeScreen
+import com.alignation.ui.photos.PhotoCaptureScreen
+import com.alignation.ui.settings.AuditLogScreen
 import com.alignation.ui.settings.SettingsScreen
 
 data class BottomNavItem(
@@ -39,30 +42,37 @@ val bottomNavItems = listOf(
     BottomNavItem(Screen.Settings, Icons.Default.Settings, "Settings")
 )
 
+// Routes that should show the bottom nav bar
+private val bottomNavRoutes = bottomNavItems.map { it.screen.route }.toSet()
+
 @Composable
 fun AlignationNavHost() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
+    val showBottomBar = currentDestination?.route in bottomNavRoutes
+
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                bottomNavItems.forEach { item ->
-                    NavigationBarItem(
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
-                        selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true,
-                        onClick = {
-                            navController.navigate(item.screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (showBottomBar) {
+                NavigationBar {
+                    bottomNavItems.forEach { item ->
+                        NavigationBarItem(
+                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            label = { Text(item.label) },
+                            selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true,
+                            onClick = {
+                                navController.navigate(item.screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -82,7 +92,32 @@ fun AlignationNavHost() {
                 HistoryScreen()
             }
             composable(Screen.Settings.route) {
-                SettingsScreen()
+                SettingsScreen(
+                    onNavigateToAuditLog = {
+                        navController.navigate(Screen.AuditLog.route)
+                    },
+                    onNavigateToPhotoCapture = {
+                        navController.navigate(Screen.PhotoCapture.route)
+                    },
+                    onNavigateToFeedback = {
+                        navController.navigate(Screen.Feedback.route)
+                    }
+                )
+            }
+            composable(Screen.AuditLog.route) {
+                AuditLogScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.PhotoCapture.route) {
+                PhotoCaptureScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.Feedback.route) {
+                FeedbackScreen(
+                    onBack = { navController.popBackStack() }
+                )
             }
         }
     }

@@ -4,8 +4,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
@@ -15,6 +15,7 @@ import com.alignation.MainActivity
 import com.alignation.R
 import com.alignation.data.model.EventType
 import com.alignation.data.repository.AlignmentRepository
+import com.alignation.data.repository.SettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -22,7 +23,8 @@ import dagger.assisted.AssistedInject
 class ReminderWorker @AssistedInject constructor(
     @Assisted private val context: Context,
     @Assisted workerParams: WorkerParameters,
-    private val repository: AlignmentRepository
+    private val repository: AlignmentRepository,
+    private val settingsRepository: SettingsRepository
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -30,14 +32,26 @@ class ReminderWorker @AssistedInject constructor(
         val latestEvent = repository.getLatestEventOnce()
 
         if (latestEvent?.eventType == EventType.REMOVED) {
-            val level = inputData.getInt(ReminderScheduler.KEY_REMINDER_LEVEL, ReminderScheduler.LEVEL_GENTLE)
-            showReminderNotification(level)
+            val level = inputData.getInt(ReminderScheduler.KEY_REMINDER_LEVEL, ReminderScheduler.LEVEL_1H_WARNING)
+            val settings = settingsRepository.getSettingsOnce()
+            showReminderNotification(level, settings?.let { getSoundUri(level, it) })
         }
 
         return Result.success()
     }
 
-    private fun showReminderNotification(level: Int) {
+    private fun getSoundUri(level: Int, settings: com.alignation.data.model.UserSettings): Uri? {
+        val uriString = when (level) {
+            ReminderScheduler.LEVEL_1H_WARNING -> settings.alertSound1hUri
+            ReminderScheduler.LEVEL_15M_BEFORE_SOFT -> settings.alertSound15mBeforeSoftUri
+            ReminderScheduler.LEVEL_15M_BEFORE_HARD -> settings.alertSound15mBeforeHardUri
+            ReminderScheduler.LEVEL_5M_BEFORE_HARD -> settings.alertSound5mBeforeHardUri
+            else -> null
+        }
+        return uriString?.let { Uri.parse(it) }
+    }
+
+    private fun showReminderNotification(level: Int, customSoundUri: Uri?) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -50,25 +64,40 @@ class ReminderWorker @AssistedInject constructor(
         )
 
         val (title, message, priority, notificationId) = when (level) {
-            ReminderScheduler.LEVEL_GENTLE -> NotificationConfig(
-                "Aligners out for 30 minutes",
-                "Just a gentle reminder - your aligners have been out a while.",
-                NotificationCompat.PRIORITY_LOW,
-                NOTIFICATION_ID_30
-            )
-            ReminderScheduler.LEVEL_SERIOUS -> NotificationConfig(
-                "Aligners out for 45 minutes",
-                "You're using up your daily budget. Consider putting them back in.",
+            ReminderScheduler.LEVEL_1H_WARNING -> NotificationConfig(
+                "Aligners out for 1 hour",
+                "You've been without aligners for an hour. Keep an eye on the clock.",
                 NotificationCompat.PRIORITY_HIGH,
-                NOTIFICATION_ID_45
+                NOTIFICATION_ID_1H
+            )
+            ReminderScheduler.LEVEL_15M_BEFORE_SOFT -> NotificationConfig(
+                "15 min before daily target!",
+                "You're approaching your daily allowance. Consider putting aligners back in.",
+                NotificationCompat.PRIORITY_HIGH,
+                NOTIFICATION_ID_15M_SOFT
+            )
+            ReminderScheduler.LEVEL_15M_BEFORE_HARD -> NotificationConfig(
+                "15 min before problem day!",
+                "You're close to exceeding the maximum. Put your aligners back in soon!",
+                NotificationCompat.PRIORITY_MAX,
+                NOTIFICATION_ID_15M_HARD
+            )
+            ReminderScheduler.LEVEL_5M_BEFORE_HARD -> NotificationConfig(
+                "5 MINUTES until problem day!",
+                "URGENT: Put your aligners back in NOW to avoid a problem day!",
+                NotificationCompat.PRIORITY_MAX,
+                NOTIFICATION_ID_5M_HARD
             )
             else -> NotificationConfig(
-                "Aligners out for 1 hour!",
-                "Your aligners have been out for an hour. Time to put them back!",
-                NotificationCompat.PRIORITY_MAX,
-                NOTIFICATION_ID_60
+                "Aligners reminder",
+                "Don't forget about your aligners!",
+                NotificationCompat.PRIORITY_DEFAULT,
+                NOTIFICATION_ID_1H
             )
         }
+
+        val soundUri = customSoundUri
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
 
         val builder = NotificationCompat.Builder(context, AlignationApp.REMINDER_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -78,18 +107,27 @@ class ReminderWorker @AssistedInject constructor(
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
 
-        // Add sound and vibration for higher priority
-        if (level >= ReminderScheduler.LEVEL_SERIOUS) {
-            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            builder.setSound(soundUri)
-            builder.setVibrate(longArrayOf(0, 250, 250, 250))
-        }
-
-        // Make alarm level more persistent
-        if (level == ReminderScheduler.LEVEL_ALARM) {
-            builder.setOngoing(false)  // Can still be dismissed but more noticeable
-            builder.setCategory(NotificationCompat.CATEGORY_ALARM)
-            builder.setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
+        when (level) {
+            ReminderScheduler.LEVEL_1H_WARNING -> {
+                builder.setSound(soundUri)
+                builder.setVibrate(longArrayOf(0, 250, 250, 250))
+            }
+            ReminderScheduler.LEVEL_15M_BEFORE_SOFT -> {
+                builder.setSound(soundUri)
+                builder.setVibrate(longArrayOf(0, 500, 200, 500))
+            }
+            ReminderScheduler.LEVEL_15M_BEFORE_HARD -> {
+                builder.setSound(soundUri)
+                builder.setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
+                builder.setCategory(NotificationCompat.CATEGORY_ALARM)
+            }
+            ReminderScheduler.LEVEL_5M_BEFORE_HARD -> {
+                // Most urgent - ongoing notification with alarm sound
+                builder.setSound(soundUri)
+                builder.setVibrate(longArrayOf(0, 1000, 500, 1000, 500, 1000))
+                builder.setCategory(NotificationCompat.CATEGORY_ALARM)
+                builder.setOngoing(true) // Can't be dismissed easily
+            }
         }
 
         val notificationManager = context.getSystemService(NotificationManager::class.java)
@@ -104,8 +142,9 @@ class ReminderWorker @AssistedInject constructor(
     )
 
     companion object {
-        const val NOTIFICATION_ID_30 = 1001
-        const val NOTIFICATION_ID_45 = 1002
-        const val NOTIFICATION_ID_60 = 1003
+        const val NOTIFICATION_ID_1H = 1001
+        const val NOTIFICATION_ID_15M_SOFT = 1002
+        const val NOTIFICATION_ID_15M_HARD = 1003
+        const val NOTIFICATION_ID_5M_HARD = 1004
     }
 }

@@ -1,7 +1,12 @@
 package com.alignation.data.repository
 
+import com.alignation.data.database.AlignerSetDao
 import com.alignation.data.database.AlignmentEventDao
+import com.alignation.data.database.AuditLogDao
+import com.alignation.data.model.AlignerSet
 import com.alignation.data.model.AlignmentEvent
+import com.alignation.data.model.AuditAction
+import com.alignation.data.model.AuditLogEntry
 import com.alignation.data.model.EventType
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -12,7 +17,9 @@ import javax.inject.Singleton
 
 @Singleton
 class AlignmentRepository @Inject constructor(
-    private val alignmentEventDao: AlignmentEventDao
+    private val alignmentEventDao: AlignmentEventDao,
+    private val alignerSetDao: AlignerSetDao,
+    private val auditLogDao: AuditLogDao
 ) {
     fun getAllEvents(): Flow<List<AlignmentEvent>> = alignmentEventDao.getAllEvents()
 
@@ -56,7 +63,9 @@ class AlignmentRepository @Inject constructor(
             isManualEntry = isManual,
             notes = notes
         )
-        return alignmentEventDao.insert(event)
+        val id = alignmentEventDao.insert(event)
+        logAudit(AuditAction.CREATE, "AlignmentEvent", id, newValue = "REMOVED at $timestamp")
+        return id
     }
 
     suspend fun logReplacement(timestamp: Instant = Instant.now(), isManual: Boolean = false, notes: String? = null): Long {
@@ -66,18 +75,75 @@ class AlignmentRepository @Inject constructor(
             isManualEntry = isManual,
             notes = notes
         )
-        return alignmentEventDao.insert(event)
+        val id = alignmentEventDao.insert(event)
+        logAudit(AuditAction.CREATE, "AlignmentEvent", id, newValue = "REPLACED at $timestamp")
+        return id
     }
 
     suspend fun updateEvent(event: AlignmentEvent) {
+        val old = alignmentEventDao.getEventById(event.id)
         alignmentEventDao.update(event)
+        logAudit(
+            AuditAction.UPDATE,
+            "AlignmentEvent",
+            event.id,
+            oldValue = old?.let { "${it.eventType} at ${it.timestamp}" },
+            newValue = "${event.eventType} at ${event.timestamp}"
+        )
     }
 
     suspend fun deleteEvent(event: AlignmentEvent) {
         alignmentEventDao.delete(event)
+        logAudit(
+            AuditAction.DELETE,
+            "AlignmentEvent",
+            event.id,
+            oldValue = "${event.eventType} at ${event.timestamp}"
+        )
     }
 
     suspend fun getEventById(id: Long): AlignmentEvent? {
         return alignmentEventDao.getEventById(id)
+    }
+
+    // Aligner Set methods
+    fun getCurrentSet(): Flow<AlignerSet?> = alignerSetDao.getCurrentSet()
+
+    suspend fun getCurrentSetOnce(): AlignerSet? = alignerSetDao.getCurrentSetOnce()
+
+    fun getAllSets(): Flow<List<AlignerSet>> = alignerSetDao.getAllSets()
+
+    suspend fun startNewSet(setNumber: Int, notes: String? = null): Long {
+        val set = AlignerSet(
+            setNumber = setNumber,
+            startedAt = Instant.now(),
+            notes = notes
+        )
+        val id = alignerSetDao.insert(set)
+        logAudit(AuditAction.CREATE, "AlignerSet", id, newValue = "Set #$setNumber")
+        return id
+    }
+
+    // Audit log methods
+    fun getAuditLog(): Flow<List<AuditLogEntry>> = auditLogDao.getAllEntries()
+
+    fun getRecentAuditLog(limit: Int = 100): Flow<List<AuditLogEntry>> = auditLogDao.getRecentEntries(limit)
+
+    private suspend fun logAudit(
+        action: AuditAction,
+        entityType: String,
+        entityId: Long,
+        oldValue: String? = null,
+        newValue: String? = null
+    ) {
+        val entry = AuditLogEntry(
+            timestamp = Instant.now(),
+            action = action,
+            entityType = entityType,
+            entityId = entityId,
+            oldValue = oldValue,
+            newValue = newValue
+        )
+        auditLogDao.insert(entry)
     }
 }

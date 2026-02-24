@@ -8,20 +8,27 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -29,15 +36,22 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -76,136 +90,303 @@ fun HomeScreen(
         return
     }
 
+    var showNewSetDialog by remember { mutableStateOf(false) }
+
     val budgetColor by animateColorAsState(
         targetValue = uiState.budgetStatus.toColor(),
         animationSpec = tween(500),
         label = "budgetColor"
     )
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Treatment progress header
-        TreatmentProgressCard(
-            weekNumber = uiState.weekNumber,
-            totalWeeks = uiState.totalWeeks,
-            daysRemaining = uiState.daysRemaining,
-            progress = uiState.treatmentProgress
-        )
+    val effectiveAllowance = uiState.dailyAllowanceMinutes + uiState.graceMinutes
+    val budgetProgress = (uiState.todayTimeOut.toMinutes().toFloat() / effectiveAllowance).coerceIn(0f, 1.5f)
+    val isOverBudget = uiState.todayTimeOut.toMinutes() > effectiveAllowance
+    val isInDanger = uiState.todayTimeOut.toMinutes() > effectiveAllowance &&
+                     uiState.todayTimeOut.toMinutes() <= uiState.maxAllowanceMinutes
 
-        Spacer(modifier = Modifier.height(16.dp))
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-        // Budget ring - main focus
-        // Progress is based on the daily allowance (2h target = 100%)
-        // Values above 100% go into the "danger zone" up to 150% (3h max)
-        val effectiveAllowance = uiState.dailyAllowanceMinutes + uiState.graceMinutes
-        val budgetProgress = (uiState.todayTimeOut.toMinutes().toFloat() / effectiveAllowance).coerceIn(0f, 1.5f)
-        val isOverBudget = uiState.todayTimeOut.toMinutes() > effectiveAllowance
-        val isInDanger = uiState.todayTimeOut.toMinutes() > effectiveAllowance &&
-                         uiState.todayTimeOut.toMinutes() <= uiState.maxAllowanceMinutes
-
-        BudgetRing(
-            progress = budgetProgress,
-            color = budgetColor,
-            size = 220.dp,
-            strokeWidth = 18.dp
+    if (isLandscape) {
+        // Landscape layout: side-by-side
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
+            // Treatment progress header (compact)
+            TreatmentProgressCard(
+                weekNumber = uiState.weekNumber,
+                totalWeeks = uiState.totalWeeks,
+                daysRemaining = uiState.daysRemaining,
+                progress = uiState.treatmentProgress,
+                currentSetNumber = uiState.currentSetNumber,
+                onNewSetClick = { showNewSetDialog = true }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = formatDurationMinutes(uiState.todayTimeOut),
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = budgetColor
-                )
-                if (isOverBudget) {
-                    Text(
-                        text = "over ${effectiveAllowance}min target",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = budgetColor
+                // Left: Budget ring
+                BudgetRing(
+                    progress = budgetProgress,
+                    color = budgetColor,
+                    size = 160.dp,
+                    strokeWidth = 14.dp
+                ) {
+                    BudgetRingContent(
+                        uiState = uiState,
+                        effectiveAllowance = effectiveAllowance,
+                        isOverBudget = isOverBudget,
+                        isInDanger = isInDanger,
+                        budgetColor = budgetColor
                     )
-                    if (isInDanger) {
-                        Text(
-                            text = "${uiState.maxAllowanceMinutes - uiState.todayTimeOut.toMinutes().toInt()}min until problem",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BudgetDanger
-                        )
-                    }
-                } else {
-                    Text(
-                        text = "of ${effectiveAllowance}min budget",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                }
+
+                // Center: Status + button
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxHeight()
+                ) {
+                    CurrentStatusCard(
+                        isAlignerIn = uiState.isAlignerIn,
+                        sessionDuration = uiState.currentSessionDuration,
+                        budgetStatus = uiState.budgetStatus
                     )
-                    if (uiState.graceMinutes > 0) {
-                        Text(
-                            text = "+${uiState.graceMinutes}min grace",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BudgetComfortable
-                        )
-                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    ActionButton(
+                        isAlignerIn = uiState.isAlignerIn,
+                        onRemove = { viewModel.onRemoveClicked() },
+                        onReplace = { viewModel.onReplaceClicked() },
+                        size = 100
+                    )
+                }
+
+                // Right: Stats
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxHeight()
+                ) {
+                    StatsRow(
+                        streak = uiState.currentStreak,
+                        problemDays = uiState.problemDays,
+                        totalDays = uiState.totalDaysTracked
+                    )
                 }
             }
         }
+    } else {
+        // Portrait layout (original)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            TreatmentProgressCard(
+                weekNumber = uiState.weekNumber,
+                totalWeeks = uiState.totalWeeks,
+                daysRemaining = uiState.daysRemaining,
+                progress = uiState.treatmentProgress,
+                currentSetNumber = uiState.currentSetNumber,
+                onNewSetClick = { showNewSetDialog = true }
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        // Current status
-        CurrentStatusCard(
-            isAlignerIn = uiState.isAlignerIn,
-            sessionDuration = uiState.currentSessionDuration,
-            budgetStatus = uiState.budgetStatus
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Action button
-        AnimatedContent(
-            targetState = uiState.isAlignerIn,
-            transitionSpec = {
-                (fadeIn() + scaleIn()) togetherWith (fadeOut() + scaleOut())
-            },
-            label = "button"
-        ) { isIn ->
-            Button(
-                onClick = {
-                    if (isIn) {
-                        viewModel.onRemoveClicked()
-                    } else {
-                        viewModel.onReplaceClicked()
-                    }
-                },
-                modifier = Modifier
-                    .size(140.dp),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isIn) RemoveButtonColor else ReplaceButtonColor
-                )
+            BudgetRing(
+                progress = budgetProgress,
+                color = budgetColor,
+                size = 220.dp,
+                strokeWidth = 18.dp
             ) {
+                BudgetRingContent(
+                    uiState = uiState,
+                    effectiveAllowance = effectiveAllowance,
+                    isOverBudget = isOverBudget,
+                    isInDanger = isInDanger,
+                    budgetColor = budgetColor
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            CurrentStatusCard(
+                isAlignerIn = uiState.isAlignerIn,
+                sessionDuration = uiState.currentSessionDuration,
+                budgetStatus = uiState.budgetStatus
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            ActionButton(
+                isAlignerIn = uiState.isAlignerIn,
+                onRemove = { viewModel.onRemoveClicked() },
+                onReplace = { viewModel.onReplaceClicked() },
+                size = 140
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            StatsRow(
+                streak = uiState.currentStreak,
+                problemDays = uiState.problemDays,
+                totalDays = uiState.totalDaysTracked
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+
+    if (showNewSetDialog) {
+        NewSetDialog(
+            currentSetNumber = uiState.currentSetNumber ?: 1,
+            onConfirm = { setNumber, notes ->
+                viewModel.onNewSetStarted(setNumber, notes)
+                showNewSetDialog = false
+            },
+            onDismiss = { showNewSetDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun NewSetDialog(
+    currentSetNumber: Int,
+    onConfirm: (Int, String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var setNumberText by remember { mutableStateOf("${currentSetNumber + 1}") }
+    var notes by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Start New Aligner Set") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = setNumberText,
+                    onValueChange = { setNumberText = it },
+                    label = { Text("Set Number") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes (optional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val num = setNumberText.toIntOrNull() ?: (currentSetNumber + 1)
+                    onConfirm(num, notes.ifBlank { null })
+                }
+            ) {
+                Text("Start Set")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun BudgetRingContent(
+    uiState: HomeUiState,
+    effectiveAllowance: Int,
+    isOverBudget: Boolean,
+    isInDanger: Boolean,
+    budgetColor: Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = formatDurationMinutes(uiState.todayTimeOut),
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Bold,
+            color = budgetColor
+        )
+        if (isOverBudget) {
+            Text(
+                text = "over ${effectiveAllowance}min target",
+                style = MaterialTheme.typography.bodySmall,
+                color = budgetColor
+            )
+            if (isInDanger) {
                 Text(
-                    text = if (isIn) "Remove" else "Replace",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    textAlign = TextAlign.Center
+                    text = "${uiState.maxAllowanceMinutes - uiState.todayTimeOut.toMinutes().toInt()}min until problem",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BudgetDanger
+                )
+            }
+        } else {
+            Text(
+                text = "of ${effectiveAllowance}min budget",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (uiState.graceMinutes > 0) {
+                Text(
+                    text = "+${uiState.graceMinutes}min grace",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BudgetComfortable
                 )
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Streak and problem days
-        StatsRow(
-            streak = uiState.currentStreak,
-            problemDays = uiState.problemDays,
-            totalDays = uiState.totalDaysTracked
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
+@Composable
+private fun ActionButton(
+    isAlignerIn: Boolean,
+    onRemove: () -> Unit,
+    onReplace: () -> Unit,
+    size: Int
+) {
+    AnimatedContent(
+        targetState = isAlignerIn,
+        transitionSpec = {
+            (fadeIn() + scaleIn()) togetherWith (fadeOut() + scaleOut())
+        },
+        label = "button"
+    ) { isIn ->
+        Button(
+            onClick = {
+                if (isIn) onRemove() else onReplace()
+            },
+            modifier = Modifier.size(size.dp),
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isIn) RemoveButtonColor else ReplaceButtonColor
+            )
+        ) {
+            Text(
+                text = if (isIn) "Remove" else "Replace",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -240,7 +421,9 @@ private fun TreatmentProgressCard(
     weekNumber: Int,
     totalWeeks: Int,
     daysRemaining: Int,
-    progress: Float
+    progress: Float,
+    currentSetNumber: Int?,
+    onNewSetClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -253,7 +436,8 @@ private fun TreatmentProgressCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Week $weekNumber of $totalWeeks",
@@ -261,6 +445,15 @@ private fun TreatmentProgressCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
+                if (currentSetNumber != null) {
+                    Text(
+                        text = "Set #$currentSetNumber",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { onNewSetClick() }
+                    )
+                }
                 Text(
                     text = "$daysRemaining days left",
                     style = MaterialTheme.typography.titleSmall,

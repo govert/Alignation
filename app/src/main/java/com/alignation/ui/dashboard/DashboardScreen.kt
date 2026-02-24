@@ -395,6 +395,7 @@ private fun WeeklyView(uiState: DashboardUiState) {
 @Composable
 private fun MonthlyView(uiState: DashboardUiState) {
     val today = LocalDate.now()
+    val treatmentStart = uiState.settings?.treatmentStartDate
     val yearMonth = YearMonth.from(today)
     val firstDayOfMonth = yearMonth.atDay(1)
     val daysInMonth = yearMonth.lengthOfMonth()
@@ -441,7 +442,9 @@ private fun MonthlyView(uiState: DashboardUiState) {
 
                         if (dayOfMonth in 1..daysInMonth) {
                             val date = yearMonth.atDay(dayOfMonth)
-                            val stats = uiState.monthStats[date]
+                            // Don't show color overlays for days before treatment start
+                            val isBeforeTreatment = treatmentStart != null && date.isBefore(treatmentStart)
+                            val stats = if (isBeforeTreatment) null else uiState.monthStats[date]
 
                             CalendarDay(
                                 day = dayOfMonth,
