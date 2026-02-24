@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -25,6 +26,7 @@ import com.alignation.ui.dashboard.DashboardScreen
 import com.alignation.ui.feedback.FeedbackScreen
 import com.alignation.ui.history.HistoryScreen
 import com.alignation.ui.home.HomeScreen
+import com.alignation.ui.more.MoreScreen
 import com.alignation.ui.photos.PhotoCaptureScreen
 import com.alignation.ui.settings.AuditLogScreen
 import com.alignation.ui.settings.SettingsScreen
@@ -39,6 +41,7 @@ val bottomNavItems = listOf(
     BottomNavItem(Screen.Home, Icons.Default.Home, "Home"),
     BottomNavItem(Screen.Dashboard, Icons.Default.BarChart, "Dashboard"),
     BottomNavItem(Screen.History, Icons.Default.History, "History"),
+    BottomNavItem(Screen.More, Icons.Default.MoreHoriz, "More"),
     BottomNavItem(Screen.Settings, Icons.Default.Settings, "Settings")
 )
 
@@ -91,13 +94,17 @@ fun AlignationNavHost() {
             composable(Screen.History.route) {
                 HistoryScreen()
             }
+            composable(Screen.More.route) {
+                MoreScreen(
+                    onNavigateToPhotoCapture = {
+                        navController.navigate(Screen.PhotoCapture.route)
+                    }
+                )
+            }
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToAuditLog = {
                         navController.navigate(Screen.AuditLog.route)
-                    },
-                    onNavigateToPhotoCapture = {
-                        navController.navigate(Screen.PhotoCapture.route)
                     },
                     onNavigateToFeedback = {
                         navController.navigate(Screen.Feedback.route)

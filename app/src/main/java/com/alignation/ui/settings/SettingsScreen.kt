@@ -60,7 +60,6 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(
     onNavigateToAuditLog: () -> Unit = {},
-    onNavigateToPhotoCapture: () -> Unit = {},
     onNavigateToFeedback: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -103,6 +102,18 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
+        }
+
+        // Send Feedback at the top
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                NavigationRow(
+                    title = "Send Feedback",
+                    description = "Report issues or request features",
+                    onClick = onNavigateToFeedback,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
         }
 
         // Treatment section
@@ -355,12 +366,12 @@ fun SettingsScreen(
             }
         }
 
-        // Navigation items
+        // Data tools
         item {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Data & Tools",
+                        text = "Data",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -371,38 +382,6 @@ fun SettingsScreen(
                         title = "View Audit Log",
                         description = "See all data changes",
                         onClick = onNavigateToAuditLog
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    NavigationRow(
-                        title = "Progress Photos",
-                        description = "Take and view progress photos",
-                        onClick = onNavigateToPhotoCapture
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    NavigationRow(
-                        title = "Send Feedback",
-                        description = "Report issues or request features",
-                        onClick = onNavigateToFeedback
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    NavigationRow(
-                        title = "Share Progress",
-                        description = "Share a summary of your treatment progress",
-                        onClick = { viewModel.shareProgress() }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    NavigationRow(
-                        title = "Export Data",
-                        description = "Export tracking data as CSV",
-                        onClick = { viewModel.exportData() }
                     )
                 }
             }
@@ -430,6 +409,15 @@ fun SettingsScreen(
                     Text(
                         text = "Track your aligner wear compliance",
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Developed by DNA Kode",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -510,10 +498,11 @@ private fun AlarmToggleRow(
 private fun NavigationRow(
     title: String,
     description: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp),
