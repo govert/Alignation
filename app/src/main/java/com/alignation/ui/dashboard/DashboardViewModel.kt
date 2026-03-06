@@ -46,6 +46,7 @@ data class DashboardUiState(
     val selectedTab: DashboardTab = DashboardTab.DAILY,
     val selectedDate: LocalDate = LocalDate.now(),
     val todayStats: DayStats? = null,
+    val allDayStats: Map<LocalDate, DayStats> = emptyMap(),
     val weekStats: List<DayStats> = emptyList(),
     val monthStats: Map<LocalDate, DayStats> = emptyMap(),
     val averageTimeOut: Duration = Duration.ZERO,
@@ -85,6 +86,14 @@ class DashboardViewModel @Inject constructor(
         loadDailyTimeline(date)
     }
 
+    fun drillIntoDate(date: LocalDate) {
+        _uiState.value = _uiState.value.copy(
+            selectedDate = date,
+            selectedTab = DashboardTab.DAILY
+        )
+        loadDailyTimeline(date)
+    }
+
     private fun loadDashboardData() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
@@ -113,17 +122,17 @@ class DashboardViewModel @Inject constructor(
                 weekStats.add(calculateDayStats(date, events, wasOut, settings))
             }
 
-            // Load month stats - only for days from treatment start onwards
-            val monthStats = mutableMapOf<LocalDate, DayStats>()
-            val monthStatsStart = if (treatmentStart.isAfter(monthStart)) treatmentStart else monthStart
-            var currentDate = monthStatsStart
+            val allDayStats = mutableMapOf<LocalDate, DayStats>()
+            var currentDate = treatmentStart
             while (!currentDate.isAfter(today)) {
                 val events = repository.getEventsForDateOnce(currentDate)
                 val prevDayEvents = repository.getEventsForDateOnce(currentDate.minusDays(1))
                 val wasOut = prevDayEvents.lastOrNull()?.eventType == EventType.REMOVED
-                monthStats[currentDate] = calculateDayStats(currentDate, events, wasOut, settings)
+                allDayStats[currentDate] = calculateDayStats(currentDate, events, wasOut, settings)
                 currentDate = currentDate.plusDays(1)
             }
+
+            val monthStats = allDayStats.filterKeys { !it.isBefore(monthStart) }
 
             // Calculate averages and stats since treatment start
             val validDays = weekStats.filter { it.timeOut > Duration.ZERO || it.date >= treatmentStart }
@@ -163,6 +172,7 @@ class DashboardViewModel @Inject constructor(
                 selectedTab = _uiState.value.selectedTab,
                 selectedDate = today,
                 todayStats = todayStats,
+                allDayStats = allDayStats,
                 weekStats = weekStats,
                 monthStats = monthStats,
                 averageTimeOut = averageTimeOut,

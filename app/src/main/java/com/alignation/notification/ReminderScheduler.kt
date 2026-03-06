@@ -23,6 +23,7 @@ class ReminderScheduler @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
+        const val REMINDER_WORK_30M_WARNING = "aligner_reminder_30m_warning"
         const val REMINDER_WORK_1H = "aligner_reminder_1h"
         const val REMINDER_WORK_15M_SOFT = "aligner_reminder_15m_soft"
         const val REMINDER_WORK_15M_HARD = "aligner_reminder_15m_hard"
@@ -39,6 +40,7 @@ class ReminderScheduler @Inject constructor(
         const val LEVEL_15M_BEFORE_SOFT = 1    // 15 min before daily target
         const val LEVEL_15M_BEFORE_HARD = 2    // 15 min before problem threshold
         const val LEVEL_5M_BEFORE_HARD = 3     // 5 min before problem threshold (urgent)
+        const val LEVEL_30M_WARNING = 4        // 30 min out
     }
 
     fun scheduleTimedReminders(settings: UserSettings? = null) {
@@ -50,6 +52,15 @@ class ReminderScheduler @Inject constructor(
         workManager.cancelUniqueWork(REMINDER_WORK_30_MIN)
         workManager.cancelUniqueWork(REMINDER_WORK_45_MIN)
         workManager.cancelUniqueWork(REMINDER_WORK_60_MIN)
+
+        // Schedule 30 min warning
+        if (settings?.enableAlarm30m != false) {
+            val work30m = OneTimeWorkRequestBuilder<ReminderWorker>()
+                .setInitialDelay(30, TimeUnit.MINUTES)
+                .setInputData(workDataOf(KEY_REMINDER_LEVEL to LEVEL_30M_WARNING))
+                .build()
+            workManager.enqueueUniqueWork(REMINDER_WORK_30M_WARNING, ExistingWorkPolicy.REPLACE, work30m)
+        }
 
         // Schedule 1 hour warning
         if (settings?.enableAlarm1h != false) {
@@ -93,6 +104,7 @@ class ReminderScheduler @Inject constructor(
 
     fun cancelAllReminders() {
         val workManager = WorkManager.getInstance(context)
+        workManager.cancelUniqueWork(REMINDER_WORK_30M_WARNING)
         workManager.cancelUniqueWork(REMINDER_WORK_1H)
         workManager.cancelUniqueWork(REMINDER_WORK_15M_SOFT)
         workManager.cancelUniqueWork(REMINDER_WORK_15M_HARD)

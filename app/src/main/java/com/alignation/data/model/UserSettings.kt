@@ -23,6 +23,7 @@ data class UserSettings(
     // Feature toggles
     val enableGraceTime: Boolean = true,
     // Alarm enable/disable toggles
+    val enableAlarm30m: Boolean = true,
     val enableAlarm1h: Boolean = true,
     val enableAlarm15mBeforeSoft: Boolean = true,
     val enableAlarm15mBeforeHard: Boolean = true,

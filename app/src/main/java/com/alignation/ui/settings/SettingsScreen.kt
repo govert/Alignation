@@ -299,6 +299,14 @@ fun SettingsScreen(
 
                         val settings = uiState.settings
 
+                        // 30m alarm toggle
+                        AlarmToggleRow(
+                            title = "30 min warning",
+                            description = "Early alert after 30 minutes out",
+                            enabled = settings?.enableAlarm30m ?: true,
+                            onToggle = { viewModel.updateAlarmToggle(alarm30m = it) }
+                        )
+
                         // 1h alarm toggle
                         AlarmToggleRow(
                             title = "1 hour warning",

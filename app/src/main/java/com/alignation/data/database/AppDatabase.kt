@@ -19,7 +19,7 @@ import com.alignation.data.model.UserSettings
         AuditLogEntry::class,
         PhotoSet::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -103,6 +103,12 @@ abstract class AppDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE user_settings ADD COLUMN enableAlarm15mBeforeSoft INTEGER NOT NULL DEFAULT 1")
                 database.execSQL("ALTER TABLE user_settings ADD COLUMN enableAlarm15mBeforeHard INTEGER NOT NULL DEFAULT 1")
                 database.execSQL("ALTER TABLE user_settings ADD COLUMN enableAlarm5mBeforeHard INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE user_settings ADD COLUMN enableAlarm30m INTEGER NOT NULL DEFAULT 1")
             }
         }
     }

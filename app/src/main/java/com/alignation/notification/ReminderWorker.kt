@@ -42,6 +42,7 @@ class ReminderWorker @AssistedInject constructor(
 
     private fun getSoundUri(level: Int, settings: com.alignation.data.model.UserSettings): Uri? {
         val uriString = when (level) {
+            ReminderScheduler.LEVEL_30M_WARNING -> settings.alertSound1hUri
             ReminderScheduler.LEVEL_1H_WARNING -> settings.alertSound1hUri
             ReminderScheduler.LEVEL_15M_BEFORE_SOFT -> settings.alertSound15mBeforeSoftUri
             ReminderScheduler.LEVEL_15M_BEFORE_HARD -> settings.alertSound15mBeforeHardUri
@@ -64,10 +65,16 @@ class ReminderWorker @AssistedInject constructor(
         )
 
         val (title, message, priority, notificationId) = when (level) {
+            ReminderScheduler.LEVEL_30M_WARNING -> NotificationConfig(
+                "Aligners out for 30 minutes",
+                "Quick nudge: put them back soon to protect today's budget.",
+                NotificationCompat.PRIORITY_HIGH,
+                NOTIFICATION_ID_30M,
+            )
             ReminderScheduler.LEVEL_1H_WARNING -> NotificationConfig(
                 "Aligners out for 1 hour",
                 "You've been without aligners for an hour. Keep an eye on the clock.",
-                NotificationCompat.PRIORITY_HIGH,
+                NotificationCompat.PRIORITY_MAX,
                 NOTIFICATION_ID_1H
             )
             ReminderScheduler.LEVEL_15M_BEFORE_SOFT -> NotificationConfig(
@@ -106,25 +113,33 @@ class ReminderWorker @AssistedInject constructor(
             .setPriority(priority)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
 
         when (level) {
+            ReminderScheduler.LEVEL_30M_WARNING -> {
+                builder.setSound(soundUri)
+                builder.setVibrate(longArrayOf(0, 350, 150, 350, 150, 350))
+                builder.setCategory(NotificationCompat.CATEGORY_ALARM)
+            }
             ReminderScheduler.LEVEL_1H_WARNING -> {
                 builder.setSound(soundUri)
-                builder.setVibrate(longArrayOf(0, 250, 250, 250))
+                builder.setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
+                builder.setCategory(NotificationCompat.CATEGORY_ALARM)
             }
             ReminderScheduler.LEVEL_15M_BEFORE_SOFT -> {
                 builder.setSound(soundUri)
-                builder.setVibrate(longArrayOf(0, 500, 200, 500))
+                builder.setVibrate(longArrayOf(0, 600, 200, 600, 200, 600))
+                builder.setCategory(NotificationCompat.CATEGORY_ALARM)
             }
             ReminderScheduler.LEVEL_15M_BEFORE_HARD -> {
                 builder.setSound(soundUri)
-                builder.setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
+                builder.setVibrate(longArrayOf(0, 800, 250, 800, 250, 800))
                 builder.setCategory(NotificationCompat.CATEGORY_ALARM)
             }
             ReminderScheduler.LEVEL_5M_BEFORE_HARD -> {
                 // Most urgent - ongoing notification with alarm sound
                 builder.setSound(soundUri)
-                builder.setVibrate(longArrayOf(0, 1000, 500, 1000, 500, 1000))
+                builder.setVibrate(longArrayOf(0, 1200, 300, 1200, 300, 1200))
                 builder.setCategory(NotificationCompat.CATEGORY_ALARM)
                 builder.setOngoing(true) // Can't be dismissed easily
             }
@@ -142,6 +157,7 @@ class ReminderWorker @AssistedInject constructor(
     )
 
     companion object {
+        const val NOTIFICATION_ID_30M = 1000
         const val NOTIFICATION_ID_1H = 1001
         const val NOTIFICATION_ID_15M_SOFT = 1002
         const val NOTIFICATION_ID_15M_HARD = 1003

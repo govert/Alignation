@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,11 +49,13 @@ import com.alignation.ui.theme.StatusGreen
 import com.alignation.ui.theme.StatusRed
 import com.alignation.ui.theme.StreakFire
 import java.time.Duration
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 @Composable
@@ -119,9 +122,9 @@ fun DashboardScreen(
 
         // Tab content
         when (uiState.selectedTab) {
-            DashboardTab.DAILY -> DailyView(uiState)
-            DashboardTab.WEEKLY -> WeeklyView(uiState)
-            DashboardTab.MONTHLY -> MonthlyView(uiState)
+            DashboardTab.DAILY -> DailyView(uiState, onSelectDate = viewModel::selectDate)
+            DashboardTab.WEEKLY -> WeeklyView(uiState, onDrillIntoDate = viewModel::drillIntoDate)
+            DashboardTab.MONTHLY -> MonthlyView(uiState, onDrillIntoDate = viewModel::drillIntoDate)
         }
     }
 }
@@ -159,12 +162,72 @@ private fun StatCard(
 }
 
 @Composable
-private fun DailyView(uiState: DashboardUiState) {
+private fun DailyView(
+    uiState: DashboardUiState,
+    onSelectDate: (LocalDate) -> Unit
+) {
+    val today = LocalDate.now()
+    val selectedStats = uiState.allDayStats[uiState.selectedDate]
+    val recentDays = (6 downTo 0).map { today.minusDays(it.toLong()) }
+
     Column(
         modifier = Modifier.verticalScroll(rememberScrollState())
     ) {
-        // Today's summary
-        uiState.todayStats?.let { stats ->
+        Text(
+            text = "Recent Days",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            recentDays.forEach { date ->
+                val isToday = date == today
+                val isSelected = date == uiState.selectedDate
+                val dayStats = uiState.allDayStats[date]
+
+                Column(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onSelectDate(date) }
+                        .background(
+                            when {
+                                isToday -> MaterialTheme.colorScheme.primary
+                                isSelected -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                                else -> Color.Transparent
+                            }
+                        )
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = date.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(dayStats?.status?.toColor()?.copy(alpha = if (isToday) 1f else 0.2f) ?: Color.Transparent)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        selectedStats?.let { stats ->
             Card(
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -172,7 +235,7 @@ private fun DailyView(uiState: DashboardUiState) {
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
-                        text = "Today's Budget",
+                        text = if (uiState.selectedDate == today) "Today's Budget" else "${uiState.selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))} Budget",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -202,6 +265,14 @@ private fun DailyView(uiState: DashboardUiState) {
                     }
                 }
             }
+        } ?: Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "No data for ${uiState.selectedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}",
+                modifier = Modifier.padding(16.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -310,127 +381,133 @@ private fun TimelineChart(segments: List<TimelineSegment>) {
 }
 
 @Composable
-private fun WeeklyView(uiState: DashboardUiState) {
+private fun WeeklyView(
+    uiState: DashboardUiState,
+    onDrillIntoDate: (LocalDate) -> Unit
+) {
     val maxAllowance = uiState.settings?.maxAllowanceMinutes ?: 180
+    val today = LocalDate.now()
+    val treatmentStart = uiState.settings?.treatmentStartDate ?: today
+    val weekStarts = remember(treatmentStart, today) {
+        buildWeekStarts(treatmentStart, today)
+    }
 
-    Column {
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Last 7 Days - Time Out",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        weekStarts.forEach { weekStart ->
+            val days = (0..6).map { weekStart.plusDays(it.toLong()) }
+            val isCurrentWeek = !today.isBefore(weekStart) && !today.isAfter(weekStart.plusDays(6))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isCurrentWeek) {
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+                    }
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Week of ${weekStart.format(DateTimeFormatter.ofPattern("MMM d"))}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isCurrentWeek) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                // Bar chart showing time OUT (higher = worse)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    uiState.weekStats.forEach { stats ->
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            // Bar - scaled to max allowance (3h)
-                            val heightFraction = (stats.timeOut.toMinutes().toFloat() / maxAllowance).coerceIn(0f, 1f)
-                            Box(
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        days.forEach { date ->
+                            val stats = uiState.allDayStats[date]
+                            val heightFraction = ((stats?.timeOut?.toMinutes() ?: 0L).toFloat() / maxAllowance).coerceIn(0f, 1f)
+                            val isFuture = date.isAfter(today)
+                            val canOpen = !date.isAfter(today) && !date.isBefore(treatmentStart)
+                            val barAlpha = when {
+                                isFuture -> 0.12f
+                                isCurrentWeek -> 0.9f
+                                else -> 0.3f
+                            }
+                            Column(
                                 modifier = Modifier
-                                    .width(32.dp)
-                                    .height((120 * heightFraction).dp)
-                                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                                    .background(stats.status.toColor())
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            // Day label
-                            Text(
-                                text = stats.date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
-                                style = MaterialTheme.typography.labelSmall
-                            )
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable(enabled = canOpen) { onDrillIntoDate(date) }
+                                    .padding(horizontal = 2.dp, vertical = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(28.dp)
+                                        .height((120 * heightFraction).dp)
+                                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                        .background((stats?.status ?: DayStatus.NO_DATA).toColor().copy(alpha = barAlpha))
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (date == today) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isCurrentWeek) 0.8f else 0.55f)
+                                )
+                            }
                         }
                     }
                 }
-
-                // Legend
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(BudgetComfortable, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("<2h", style = MaterialTheme.typography.labelSmall)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(BudgetWarning, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("2-3h", style = MaterialTheme.typography.labelSmall)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(BudgetProblem, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(">3h", style = MaterialTheme.typography.labelSmall)
-                }
             }
+            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 }
 
 @Composable
-private fun MonthlyView(uiState: DashboardUiState) {
+private fun MonthlyView(
+    uiState: DashboardUiState,
+    onDrillIntoDate: (LocalDate) -> Unit
+) {
     val today = LocalDate.now()
-    val treatmentStart = uiState.settings?.treatmentStartDate
-    val yearMonth = YearMonth.from(today)
-    val firstDayOfMonth = yearMonth.atDay(1)
-    val daysInMonth = yearMonth.lengthOfMonth()
-    val startDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // 0 = Sunday
+    val treatmentStart = uiState.settings?.treatmentStartDate ?: today
+    val months = remember(treatmentStart, today) {
+        buildMonthList(treatmentStart, today)
+    }
 
-    Column {
-        Text(
-            text = yearMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        months.forEach { yearMonth ->
+            val isCurrentMonth = yearMonth == YearMonth.from(today)
+            val firstDayOfMonth = yearMonth.atDay(1)
+            val daysInMonth = yearMonth.lengthOfMonth()
+            val startDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7
+            val totalCells = startDayOfWeek + daysInMonth
+            val rows = (totalCells + 6) / 7
 
-        // Day of week headers
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            listOf("S", "M", "T", "W", "T", "F", "S").forEach { day ->
-                Text(
-                    text = day,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center
-                )
+            Text(
+                text = yearMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isCurrentMonth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                listOf("S", "M", "T", "W", "T", "F", "S").forEach { day ->
+                    Text(
+                        text = day,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        color = if (isCurrentMonth) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                    )
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // Calendar grid
-        val totalCells = startDayOfWeek + daysInMonth
-        val rows = (totalCells + 6) / 7
-
-        Column {
             for (row in 0 until rows) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -442,14 +519,18 @@ private fun MonthlyView(uiState: DashboardUiState) {
 
                         if (dayOfMonth in 1..daysInMonth) {
                             val date = yearMonth.atDay(dayOfMonth)
-                            // Don't show color overlays for days before treatment start
-                            val isBeforeTreatment = treatmentStart != null && date.isBefore(treatmentStart)
-                            val stats = if (isBeforeTreatment) null else uiState.monthStats[date]
+                            val isBeforeTreatment = date.isBefore(treatmentStart)
+                            val stats = if (isBeforeTreatment) null else uiState.allDayStats[date]
+                            val canOpen = !date.isAfter(today) && !isBeforeTreatment
 
                             CalendarDay(
                                 day = dayOfMonth,
                                 status = stats?.status ?: DayStatus.NO_DATA,
                                 isToday = date == today,
+                                isSelected = date == uiState.selectedDate,
+                                onClick = { onDrillIntoDate(date) },
+                                enabled = canOpen,
+                                toneDown = !isCurrentMonth,
                                 modifier = Modifier.weight(1f)
                             )
                         } else {
@@ -458,6 +539,8 @@ private fun MonthlyView(uiState: DashboardUiState) {
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -467,6 +550,10 @@ private fun CalendarDay(
     day: Int,
     status: DayStatus,
     isToday: Boolean,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    toneDown: Boolean,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -474,10 +561,12 @@ private fun CalendarDay(
             .padding(2.dp)
             .size(36.dp)
             .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick)
             .background(
                 when {
                     isToday -> MaterialTheme.colorScheme.primary
-                    status != DayStatus.NO_DATA -> status.toColor().copy(alpha = 0.3f)
+                    isSelected -> MaterialTheme.colorScheme.secondaryContainer
+                    status != DayStatus.NO_DATA -> status.toColor().copy(alpha = if (toneDown) 0.16f else 0.3f)
                     else -> Color.Transparent
                 }
             ),
@@ -486,7 +575,13 @@ private fun CalendarDay(
         Text(
             text = day.toString(),
             style = MaterialTheme.typography.bodySmall,
-            color = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+            color = when {
+                isToday -> MaterialTheme.colorScheme.onPrimary
+                isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
+                !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                toneDown -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                else -> MaterialTheme.colorScheme.onSurface
+            }
         )
     }
 }
@@ -499,6 +594,32 @@ private fun StatusIndicator(status: DayStatus) {
             .clip(CircleShape)
             .background(status.toColor())
     )
+}
+
+private fun buildWeekStarts(startDate: LocalDate, endDate: LocalDate): List<LocalDate> {
+    var cursor = endDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    val earliestWeek = startDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    val weeks = mutableListOf<LocalDate>()
+
+    while (!cursor.isBefore(earliestWeek)) {
+        weeks.add(cursor)
+        cursor = cursor.minusWeeks(1)
+    }
+
+    return weeks
+}
+
+private fun buildMonthList(startDate: LocalDate, endDate: LocalDate): List<YearMonth> {
+    var cursor = YearMonth.from(endDate)
+    val first = YearMonth.from(startDate)
+    val months = mutableListOf<YearMonth>()
+
+    while (!cursor.isBefore(first)) {
+        months.add(cursor)
+        cursor = cursor.minusMonths(1)
+    }
+
+    return months
 }
 
 private fun DayStatus.toColor(): Color = when (this) {

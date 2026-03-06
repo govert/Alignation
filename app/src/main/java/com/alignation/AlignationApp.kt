@@ -3,6 +3,8 @@ package com.alignation
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -38,6 +40,15 @@ class AlignationApp : Application(), Configuration.Provider {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Reminders to put your aligners back in"
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 600, 250, 600)
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
             }
 
             val notificationManager = getSystemService(NotificationManager::class.java)

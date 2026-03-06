@@ -123,6 +123,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun updateAlarmToggle(
+        alarm30m: Boolean? = null,
         alarm1h: Boolean? = null,
         alarm15mSoft: Boolean? = null,
         alarm15mHard: Boolean? = null,
@@ -132,6 +133,7 @@ class SettingsViewModel @Inject constructor(
             val current = settingsRepository.getSettingsOnce() ?: return@launch
             settingsRepository.updateSettings(
                 current.copy(
+                    enableAlarm30m = alarm30m ?: current.enableAlarm30m,
                     enableAlarm1h = alarm1h ?: current.enableAlarm1h,
                     enableAlarm15mBeforeSoft = alarm15mSoft ?: current.enableAlarm15mBeforeSoft,
                     enableAlarm15mBeforeHard = alarm15mHard ?: current.enableAlarm15mBeforeHard,
